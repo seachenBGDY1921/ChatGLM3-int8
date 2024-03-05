@@ -74,8 +74,8 @@ class KnowledgeService(object):
                 split_docs = text_splitter.create_documents([img_docs])
                 docs.extend(split_docs)
 
-        # 这里调用出问题，
         self.knowledge_base = FAISS.from_documents(docs, self.embeddings)
+
 
     def add_document(self, document_path):
         split_doc = []
@@ -109,6 +109,18 @@ class KnowledgeService(object):
         else:
             self.knowledge_base.add_documents(split_doc)
 
+
+#   仿写下面的
+    def save_knowledge_base(self, path=None):
+        if self.knowledge_base is not None:
+            # 如果没有提供路径，使用预设的知识库路径
+            save_path = path if path is not None else self.knowledge_base_path
+            # 调用FAISS提供的或者自定义的保存方法
+            FAISS.save_local(self.knowledge_base, save_path)
+            print(f"Knowledge base index saved to {save_path}")
+        else:
+            print("No knowledge base index to save.")
+
     #  下面这个函数没有被调用，这个应该是以及转化好的向量知识库保存的位置，可以直接调用，省去转化的步骤
     def load_knowledge_base(self, path):
         if path is None:
@@ -116,6 +128,23 @@ class KnowledgeService(object):
         else:
             self.knowledge_base = FAISS.load_local(path, self.embeddings)
         return self.knowledge_base
+
+
+# def save_documents(documents,index = "faiss_index"):
+# 	print("documents:",documents)
+# 	docs = text_splitter.split_documents(documents)
+# 	print("docs:",docs)
+# 	db = FAISS.from_documents(docs, embeddings)
+# 	db.save_local(index)
+# 	return db
+#
+# def get_documents(index="faiss_index", query="", limit=3):
+#     db = FAISS.load_local(index, embeddings)
+#     docs = db.similarity_search(query, k=limit)
+#     txts = documents2dict(docs)
+#     print("txts:",txts)
+#     return txts
+
 
 
 # 这两个函数`init_knowledge_base`和`add_document`都是假定的代码片段，
