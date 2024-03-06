@@ -117,7 +117,9 @@ class KnowledgeService(object):
             self.knowledge_base = FAISS.load_local(path, self.embeddings)
         return self.knowledge_base
 
-
+    def get_response(self, query):
+        # 这个方法检查知识库里是否有对应的回答
+        return self.knowledge_base.get(query, None)
 # 这两个函数`init_knowledge_base`和`add_document`都是假定的代码片段，
 # 应该是用于处理和存储文档的一部分。下面我将分别解释每个函数的作用以及`docs`和`knowledge_base`的区别。
 
