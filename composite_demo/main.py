@@ -8,7 +8,7 @@ st.set_page_config(
 )
 
 
-import demo_chat, demo_ci, demo_tool
+import demo_chat
 from enum import Enum
 
 DEFAULT_SYSTEM_PROMPT = '''
@@ -79,23 +79,6 @@ match tab:
             repetition_penalty=repetition_penalty,
             max_new_tokens=max_new_token
         )
-    case Mode.TOOL:
-        demo_tool.main(
-            retry=retry,
-            top_p=top_p,
-            temperature=temperature,
-            prompt_text=prompt_text,
-            repetition_penalty=repetition_penalty,
-            max_new_tokens=max_new_token,
-            truncate_length=1024)
-    case Mode.CI:
-        demo_ci.main(
-            retry=retry,
-            top_p=top_p,
-            temperature=temperature,
-            prompt_text=prompt_text,
-            repetition_penalty=repetition_penalty,
-            max_new_tokens=max_new_token,
-            truncate_length=1024)
+
     case _:
         st.error(f'Unexpected tab: {tab}')
