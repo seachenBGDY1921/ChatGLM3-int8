@@ -45,8 +45,6 @@ class Client(Protocol):
         ...
 
 
-
-
 def stream_chat(
         self, tokenizer, query: str,
         history: list[tuple[str, str]] = None,
@@ -165,110 +163,125 @@ class HFClient(Client):
             self.model = AutoModel.from_pretrained(MODEL_PATH, trust_remote_code=True).quantize(4).eval()
             # add .quantize(4).cuda() before .eval() and remove device_map="auto" to use int4 model
 
+def generate_stream(
+    self,
+    system: str | None,
+    tools: list[dict] | None,
+    history: list[Conversation],
+    **parameters: Any
+) -> Iterable[TextGenerationStreamResponse]:
+    # 获取最新的用户输入
+    query = history[-1].content
 
-    def generate_stream(
-            self,
-            system: str | None,
-            tools: list[dict] | None,
-            history: list[Conversation],
-            **parameters: Any
-    ) -> Iterable[TextGenerationStreamResponse]:
-        # 获取最新的用户输入
-        query = history[-1].content
+    # 从知识库中寻找答案
+    knowledge_responses, _ = self.knowledge_service.search(query, top_k=1)
+    knowledge_response = knowledge_responses[0] if knowledge_responses else None
 
-        # 从知识库中寻找答案
-        knowledge_response = self.knowledge_service.get_response(query)
+    # 构建聊天历史作为模型的输入
+    chat_history = [{
+        'role': 'system',
+        'content': system if not tools else TOOL_PROMPT,
+    }]
+    if tools:
+        chat_history[0]['tools'] = tools
+    for conversation in history[:-1]:
+        chat_history.append({
+            'role': str(conversation.role).removeprefix('<|').removesuffix('|>'),
+            'content': conversation.content,
+        })
 
-        # 构建聊天历史作为模型的输入
-        chat_history = [{
-            'role': 'system',
-            'content': system if not tools else TOOL_PROMPT,
-        }]
-        if tools:
-            chat_history[0]['tools'] = tools
-        for conversation in history[:-1]:
-            chat_history.append({
-                'role': str(conversation.role).removeprefix('<|').removesuffix('|>'),
-                'content': conversation.content,
-            })
+    # 如果知识库有答案，将其作为上下文加入模型输出，否则回答不在语料库范围内
+    if knowledge_response:
+        chat_history.append({
+            'role': 'knowledge',
+            'content': knowledge_response,
+        })
+    else:
+        chat_history.append({
+            'role': 'knowledge',
+            'content': "您所提问的内容不在语料库范围内，请重新提问。"
+        })
 
-        # 如果知识库有答案，则将其作为上下文增强模型的输出
-        if knowledge_response:
-            chat_history.append({
-                'role': 'knowledge',
-                'content': knowledge_response,
-            })
-
-        # 准备模型的输入
-        role = str(history[-1].role).removeprefix('<|').removesuffix('|>')
-        text = ''
-        for new_text, _ in stream_chat(
-                self.model,
-                self.tokenizer,
-                query,
-                chat_history,
-                role,
-                **parameters,
-        ):
-            word = new_text.removeprefix(text)
-            word_stripped = word.strip()
-            text = new_text
-            yield TextGenerationStreamResponse(
-                generated_text=text,
-                token=Token(
-                    id=0,
-                    logprob=0,
-                    text=word,
-                    special=word_stripped.startswith('<|') and word_stripped.endswith('|>'),
-                )
+    # 准备模型的输入
+    role = str(history[-1].role).removeprefix('<|').removesuffix('|>')
+    text = ''
+    for new_text, _ in stream_chat(
+            self.model,
+            self.tokenizer,
+            query,
+            chat_history,
+            role,
+            **parameters,
+    ):
+        word = new_text.removeprefix(text)
+        word_stripped = word.strip()
+        text = new_text
+        yield TextGenerationStreamResponse(
+            generated_text=text,
+            token=Token(
+                id=0,
+                logprob=0,
+                text=word,
+                special=word_stripped.startswith('<|') and word_stripped.endswith('|>'),
             )
+        )
 
-    # def generate_stream(
-    #         self,
-    #         system: str | None,
-    #         tools: list[dict] | None,
-    #         history: list[Conversation],
-    #         **parameters: Any
-    # ) -> Iterable[TextGenerationStreamResponse]:
-    #     # 在生成文本之前，你可以根据需要调用knowledge_service来获取信息
-    #     # 例如:
-    #     # knowledge_response = self.knowledge_service.get_response(query)
-    #     # 需要决定如何将这个知识响应融入到聊天历史中或者直接使用
-    #
-    #     chat_history = [{
-    #         'role': 'system',
-    #         'content': system if not tools else TOOL_PROMPT,
-    #     }]
-    #
-    #     if tools:
-    #         chat_history[0]['tools'] = tools
-    #
-    #     for conversation in history[:-1]:
-    #         chat_history.append({
-    #             'role': str(conversation.role).removeprefix('<|').removesuffix('|>'),
-    #             'content': conversation.content,
-    #         })
-    #
-    #     query = history[-1].content
-    #     role = str(history[-1].role).removeprefix('<|').removesuffix('|>')
-    #     text = ''
-    #     for new_text, _ in stream_chat(
-    #             self.model,
-    #             self.tokenizer,
-    #             query,
-    #             chat_history,
-    #             role,
-    #             **parameters,
-    #     ):
-    #         word = new_text.removeprefix(text)
-    #         word_stripped = word.strip()
-    #         text = new_text
-    #         yield TextGenerationStreamResponse(
-    #             generated_text=text,
-    #             token=Token(
-    #                 id=0,
-    #                 logprob=0,
-    #                 text=word,
-    #                 special=word_stripped.startswith('<|') and word_stripped.endswith('|>'),
-    #             )
-    #         )
+
+# def generate_stream(
+#     self,
+#     system: str | None,
+#     tools: list[dict] | None,
+#     history: list[Conversation],
+#     **parameters: Any
+# ) -> Iterable[TextGenerationStreamResponse]:
+#     # 获取最新的用户输入
+#     query = history[-1].content
+#
+#     # 从知识库中寻找答案，注意这里调用了KnowledgeService的search方法
+#     # 假设返回最相关的一个结果
+#     knowledge_responses, _ = self.knowledge_service.search(query, top_k=1)
+#     knowledge_response = knowledge_responses[0] if knowledge_responses else None
+#
+#     # 构建聊天历史作为模型的输入
+#     chat_history = [{
+#         'role': 'system',
+#         'content': system if not tools else TOOL_PROMPT,
+#     }]
+#     if tools:
+#         chat_history[0]['tools'] = tools
+#     for conversation in history[:-1]:
+#         chat_history.append({
+#             'role': str(conversation.role).removeprefix('<|').removesuffix('|>'),
+#             'content': conversation.content,
+#         })
+#
+#     # 如果知识库有答案，则将其作为上下文增强模型的输出
+#     if knowledge_response:
+#         chat_history.append({
+#             'role': 'knowledge',
+#             'content': knowledge_response,
+#         })
+#
+#     # 准备模型的输入
+#     role = str(history[-1].role).removeprefix('<|').removesuffix('|>')
+#     text = ''
+#     for new_text, _ in stream_chat(
+#             self.model,
+#             self.tokenizer,
+#             query,
+#             chat_history,
+#             role,
+#             **parameters,
+#     ):
+#         word = new_text.removeprefix(text)
+#         word_stripped = word.strip()
+#         text = new_text
+#         yield TextGenerationStreamResponse(
+#             generated_text=text,
+#             token=Token(
+#                 id=0,
+#                 logprob=0,
+#                 text=word,
+#                 special=word_stripped.startswith('<|') and word_stripped.endswith('|>'),
+#             )
+#         )

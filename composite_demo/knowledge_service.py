@@ -117,9 +117,31 @@ class KnowledgeService(object):
             self.knowledge_base = FAISS.load_local(path, self.embeddings)
         return self.knowledge_base
 
-    def get_response(self, query):
-        # 这个方法检查知识库里是否有对应的回答
-        return self.knowledge_base.get(query, None)
+
+    def search(self, query, top_k=5):
+        """
+        在知识库中搜索与查询最相关的条目
+
+        :param query: 查询字符串
+        :param top_k: 返回的最相关结果数量，默认为5
+        :return: 搜索结果列表和距离列表
+        """
+        # 确保知识库已初始化
+        if not self.knowledge_base:
+            raise ValueError("Knowledge base has not been initialized.")
+
+        # 使用 HuggingFaceEmbeddings 模型将查询转化为向量
+        query_embedding = self.embeddings.encode([query])
+
+        # 使用FAISS从知识库中检索最相似的文档
+        distances, indices = self.knowledge_base.search(query_embedding, top_k)
+
+        # 可以选择性地返回原始文档或它们的某些元数据
+        results = [self.knowledge_base.index_to_document[idx] for idx in indices[0]]
+
+        return results, distances
+
+
 # 这两个函数`init_knowledge_base`和`add_document`都是假定的代码片段，
 # 应该是用于处理和存储文档的一部分。下面我将分别解释每个函数的作用以及`docs`和`knowledge_base`的区别。
 
